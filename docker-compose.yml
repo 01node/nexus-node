@@ -1,0 +1,67 @@
+name: nexus
+
+services:
+  reth:
+    image: ${RETH_IMAGE:?missing in .env}
+    container_name: nexus-reth
+    restart: unless-stopped
+    network_mode: host
+    stop_grace_period: 30s
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "100m"
+        max-file: "10"
+    volumes:
+      - ${DATA_BASE:?missing in .env}/reth-data:/data
+      - ${DATA_BASE}/config/evm:/evm-config:ro
+      - ${DATA_BASE}/jwt:/jwt:ro
+    command:
+      - node
+      - --datadir=/data
+      - --chain=/evm-config/genesis.json
+      - --nexus-config=/evm-config/nexus-config.evm.yaml
+      - --authrpc.jwtsecret=/jwt/jwt.hex
+      - --authrpc.addr=127.0.0.1
+      - --authrpc.port=8551
+      - --http
+      - --http.addr=0.0.0.0
+      - --http.port=8545
+      - --http.corsdomain=*
+      - --http.api=eth,net,web3,debug,txpool
+      - --ws
+      - --ws.addr=0.0.0.0
+      - --ws.port=8546
+      - --ws.origins=*
+      - --ws.api=eth,net,web3,debug,txpool
+      - --trusted-peers=${TRUSTED_PEERS:?missing in .env}
+      - --metrics=0.0.0.0:9001
+      - --txpool.lifetime=30s
+      - --txpool.disable-transactions-backup
+      - --txpool.nolocals
+      - --engine.persistence-threshold=0
+      - --engine.memory-block-buffer-target=0
+      - --full
+
+  cosmos:
+    image: ${COSMOS_IMAGE:?missing in .env}
+    container_name: nexus-cosmos
+    restart: unless-stopped
+    depends_on: [reth]
+    network_mode: host
+    stop_grace_period: 30s
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "100m"
+        max-file: "10"
+    volumes:
+      - ${DATA_BASE}/cosmos-home:/cosmos-home
+      - ${DATA_BASE}/jwt:/jwt:ro
+    environment:
+      EVM_ENGINE_JWT_SECRET_PATH: /jwt/jwt.hex
+      EVM_ENGINE_URL: http://127.0.0.1:8551
+      NEXUS_CONFIG_PATH: /cosmos-home/config/nexus-config.cosmos.yaml
+    command:
+      - --home
+      - /cosmos-home
